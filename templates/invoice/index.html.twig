@@ -1,0 +1,61 @@
+{% block javascripts %}
+    <script>
+        // Function to reload the page
+        function reloadPage() {
+            window.location.reload();
+        }
+
+        // Listen for successful upload
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadForm = document.querySelector('form[action="{{ path('app_invoice_upload') }}"]');
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const formData = new FormData(uploadForm);
+                    fetch(uploadForm.action, {
+                        method: 'POST',
+                        body: formData
+                    }).then(response => response.json())
+                      .then(data => {
+                          if (data.success) {
+                              alert('Invoice uploaded successfully!');
+                              uploadForm.submit(); // Submit the form directly to refresh the page
+                          } else {
+                              alert('Upload failed: ' + data.message);
+                          }
+                      })
+                      .catch(error => {
+                          console.error('Error:', error);
+                          alert('An error occurred during the upload.');
+                      });
+                });
+            }
+        });
+
+        // Listen for successful delete
+        document.addEventListener('DOMContentLoaded', function() {
+            const deleteButtons = document.querySelectorAll('.btn-danger');
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    const invoiceId = this.getAttribute('data-invoice-id');
+                    fetch(`/invoice/${invoiceId}/delete`, {
+                        method: 'POST'
+                    }).then(response => response.json())
+                      .then(data => {
+                          if (data.success) {
+                              alert('Invoice deleted successfully!');
+                              reloadPage(); // Reload the page to refresh the list
+                          } else {
+                              alert('Delete failed: ' + data.message);
+                          }
+                      })
+                      .catch(error => {
+                          console.error('Error:', error);
+                          alert('An error occurred during the deletion.');
+                      });
+                });
+            });
+        });
+    </script>
+{% endblock %} 

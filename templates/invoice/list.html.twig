@@ -1,0 +1,146 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Invoices{% endblock %}
+
+{% block body %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Invoices</h1>
+        <form id="uploadForm" action="/api/pdf/upload" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+            <input type="file" name="pdf" accept="application/pdf" class="form-control" required>
+            <button type="submit" class="btn btn-primary">Upload PDF</button>
+        </form>
+    </div>
+
+    <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="position: absolute; top: 20px; right: 20px; min-width: 200px;">
+        <div class="toast-header">
+            <strong class="me-auto">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body"></div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            fetch('/api/pdf/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const toast = new bootstrap.Toast(document.getElementById('toast'));
+                const toastBody = document.querySelector('.toast-body');
+                if (data.success) {
+                    toastBody.textContent = data.message;
+                    toastBody.className = 'toast-body bg-success text-white';
+                } else {
+                    toastBody.textContent = data.error;
+                    toastBody.className = 'toast-body bg-danger text-white';
+                }
+                toast.show();
+            })
+            .catch(error => {
+                const toast = new bootstrap.Toast(document.getElementById('toast'));
+                const toastBody = document.querySelector('.toast-body');
+                toastBody.textContent = 'An error occurred during upload.';
+                toastBody.className = 'toast-body bg-danger text-white';
+                toast.show();
+            });
+        });
+
+        document.querySelectorAll('.btn-delete-invoice').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (!confirm('Are you sure you want to delete this invoice?')) return;
+                const invoiceId = this.getAttribute('data-id');
+                fetch(`/invoices/${invoiceId}/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const toast = new bootstrap.Toast(document.getElementById('toast'));
+                    const toastBody = document.querySelector('.toast-body');
+                    if (data.success) {
+                        // Remove the row
+                        btn.closest('tr').remove();
+                        toastBody.textContent = 'Invoice deleted successfully.';
+                        toastBody.className = 'toast-body bg-success text-white';
+                    } else {
+                        toastBody.textContent = data.error || 'Failed to delete invoice.';
+                        toastBody.className = 'toast-body bg-danger text-white';
+                    }
+                    toast.show();
+                })
+                .catch(error => {
+                    const toast = new bootstrap.Toast(document.getElementById('toast'));
+                    const toastBody = document.querySelector('.toast-body');
+                    toastBody.textContent = 'An error occurred during deletion.';
+                    toastBody.className = 'toast-body bg-danger text-white';
+                    toast.show();
+                });
+            });
+        });
+    });
+    </script>
+
+    {% if app.session.flashBag.has('success') %}
+        <div class="alert alert-success">
+            {{ app.session.flashBag.get('success')|first }}
+        </div>
+    {% endif %}
+
+    {% if app.session.flashBag.has('error') %}
+        <div class="alert alert-danger">
+            {{ app.session.flashBag.get('error')|first }}
+        </div>
+    {% endif %}
+
+    {% if invoices|length > 0 %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Invoice Number</th>
+                        <th>Invoice Date</th>
+                        <th>Order Reference</th>
+                        <th>Order Date</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                        <tr>
+                            <td>{{ invoice.invoiceNumber }}</td>
+                            <td>{{ invoice.invoiceDate|date('d/m/Y') }}</td>
+                            <td>{{ invoice.orderReference }}</td>
+                            <td>{{ invoice.orderDate|date('d/m/Y') }}</td>
+                            <td>{{ invoice.items|length }}</td>
+                            <td>
+                                {% set total = 0 %}
+                                {% for item in invoice.items %}
+                                    {% set total = total + item.total %}
+                                {% endfor %}
+                                {{ total|number_format(2, ',', ' ') }} €
+                            </td>
+                            <td>
+                                <a href="{{ path('app_invoice_show', {id: invoice.id}) }}" class="btn btn-sm btn-info">View</a>
+                                <button type="button" class="btn btn-sm btn-danger btn-delete-invoice" data-id="{{ invoice.id }}">Delete</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            No invoices found. Use the form above to upload your first invoice.
+        </div>
+    {% endif %}
+{% endblock %} 

@@ -1,0 +1,88 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Invoice {{ invoice.invoiceNumber }}{% endblock %}
+
+{% block body %}
+    <div class="mb-4">
+        <a href="{{ path('app_invoice_list') }}" class="btn btn-secondary">&larr; Back to List</a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="card-title mb-0">Invoice {{ invoice.invoiceNumber }}</h2>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Invoice Details</h5>
+                    <table class="table">
+                        <tr>
+                            <th>Invoice Number:</th>
+                            <td>{{ invoice.invoiceNumber }}</td>
+                        </tr>
+                        <tr>
+                            <th>Invoice Date:</th>
+                            <td>{{ invoice.invoiceDate|date('d/m/Y') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Order Reference:</th>
+                            <td>{{ invoice.orderReference }}</td>
+                        </tr>
+                        <tr>
+                            <th>Order Date:</th>
+                            <td>{{ invoice.orderDate|date('d/m/Y') }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title mb-0">Items</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Code EANS</th>
+                            <th>Product</th>
+                            <th>Tax Rate</th>
+                            <th>Unit Price</th>
+                            <th>Quantity</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in invoice.items %}
+                            <tr>
+                                <td>{{ item.reference }}</td>
+                                <td>{{ item.codeEans }}</td>
+                                <td>{{ item.product }}</td>
+                                <td>{{ item.taxRate }}</td>
+                                <td>{{ item.unitPrice|number_format(2, ',', ' ') }} €</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>{{ item.total }} €</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="6" class="text-end"><strong>Total:</strong></td>
+                            <td>
+                                {% set total = 0 %}
+                                {% for item in invoice.items %}
+                                    {% set total = total + item.total %}
+                                {% endfor %}
+                                <strong>{{ total|number_format(2, ',', ' ') }} €</strong>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %} 

@@ -1,0 +1,460 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Store: {{ store.name }}{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        .loading-spinner {
+            display: none;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+            <h1 class="mb-2 mb-md-0">Store: {{ store.name }}</h1>
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="post" action="{{ path('app_store_crawl', {'id': store.id}) }}" class="d-inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token('crawl' ~ store.id) }}">
+                    <button class="btn btn-primary">
+                        <i class="fas fa-sync me-1"></i>Crawl Data
+                    </button>
+                </form>
+                <a href="{{ path('app_store_edit', {'id': store.id}) }}" class="btn btn-warning">
+                    <i class="fas fa-edit me-1"></i>Edit
+                </a>
+                <a href="{{ path('app_store_index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-1"></i>Back to List
+                </a>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Store Information</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">URL</dt>
+                            <dd class="col-sm-8 text-truncate" title="{{ store.url }}">{{ store.url }}</dd>
+
+                            <dt class="col-sm-4">Username</dt>
+                            <dd class="col-sm-8">{{ store.username }}</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Created At</dt>
+                            <dd class="col-sm-8">{{ store.createdAt|date('Y-m-d H:i:s') }}</dd>
+
+                            <dt class="col-sm-4">Last Updated</dt>
+                            <dd class="col-sm-8">{{ store.updatedAt|date('Y-m-d H:i:s') }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs mb-4" id="storeTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <a class="nav-link {% if current_view == 'daily' %}active{% endif %}" href="{{ path('app_store_show', {'id': store.id, 'view': 'daily'}) }}">
+                    Daily Sales
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link {% if current_view == 'weekly' %}active{% endif %}" href="{{ path('app_store_show', {'id': store.id, 'view': 'weekly'}) }}">
+                    Weekly Sales
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link {% if current_view == 'monthly' %}active{% endif %}" href="{{ path('app_store_show', {'id': store.id, 'view': 'monthly'}) }}">
+                    Monthly Sales
+                </a>
+            </li>
+        </ul>
+
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Invoices</h5>
+                        <p class="card-text display-6">{{ totalInvoices }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total HT</h5>
+                        <p class="card-text display-6">{{ totalHT|number_format(2, ',', ' ') }} €</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total TTC</h5>
+                        <p class="card-text display-6">{{ totalTTC|number_format(2, ',', ' ') }} €</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if grouped_sellings is not empty %}
+            {% for date, sellings in grouped_sellings %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap">
+                            <h6 class="mb-0">
+                                {% if current_view == 'daily' %}
+                                    {{ date|date('d/m/Y') }}
+                                {% elseif current_view == 'weekly' %}
+                                    Week of {{ date|date('d/m/Y') }}
+                                {% else %}
+                                    {{ date|date('F Y') }}
+                                {% endif %}
+                            </h6>
+                            <div class="d-flex gap-3 align-items-center">
+                                <span>
+                                    <strong>Invoices:</strong> {{ sellings|length }}
+                                </span>
+                                {% set dailyHT = 0 %}
+                                {% set dailyTTC = 0 %}
+                                {% for selling in sellings %}
+                                    {% set dailyHT = dailyHT + selling.amountHT %}
+                                    {% set dailyTTC = dailyTTC + selling.amountTTC %}
+                                {% endfor %}
+                                <span>
+                                    <strong>HT:</strong> {{ dailyHT|number_format(2, ',', ' ') }} €
+                                </span>
+                                <span>
+                                    <strong>TTC:</strong> {{ dailyTTC|number_format(2, ',', ' ') }} €
+                                </span>
+                                <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ date|replace({'-': '', ':': ''}) }}" aria-expanded="false" onclick="loadSellings('{{ date }}', '{{ current_view }}')">
+                                    <i class="fas fa-chevron-down me-1"></i>
+                                    <span class="loading-spinner"></span>
+                                    <span class="button-text">Show Details</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="collapse" id="collapse{{ date|replace({'-': '', ':': ''}) }}">
+                        <div class="card-body">
+                            <div class="content-placeholder">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading data...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+
+            {% if total_pages > 1 %}
+                <nav aria-label="Sales pagination" class="mt-4">
+                    <ul class="pagination justify-content-center flex-wrap">
+                        <li class="page-item {% if current_page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ path('app_store_show', {'id': store.id, 'view': current_view, 'page': current_page - 1}) }}" {% if current_page == 1 %}tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                        </li>
+                        
+                        {% for i in 1..total_pages %}
+                            <li class="page-item {% if current_page == i %}active{% endif %}">
+                                <a class="page-link" href="{{ path('app_store_show', {'id': store.id, 'view': current_view, 'page': i}) }}">{{ i }}</a>
+                            </li>
+                        {% endfor %}
+                        
+                        <li class="page-item {% if current_page == total_pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ path('app_store_show', {'id': store.id, 'view': current_view, 'page': current_page + 1}) }}" {% if current_page == total_pages %}tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-info">
+                No sales data available.
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners for all collapse elements
+            document.querySelectorAll('.collapse').forEach(collapse => {
+                collapse.addEventListener('show.bs.collapse', function() {
+                    const button = this.previousElementSibling.querySelector('button');
+                    if (button) {
+                        const icon = button.querySelector('i');
+                        const text = button.querySelector('.button-text');
+                        icon.classList.remove('fa-chevron-down');
+                        icon.classList.add('fa-chevron-up');
+                        text.textContent = 'Hide Details';
+                    }
+                });
+
+                collapse.addEventListener('hide.bs.collapse', function() {
+                    const button = this.previousElementSibling.querySelector('button');
+                    if (button) {
+                        const icon = button.querySelector('i');
+                        const text = button.querySelector('.button-text');
+                        icon.classList.remove('fa-chevron-up');
+                        icon.classList.add('fa-chevron-down');
+                        text.textContent = 'Show Details';
+                    }
+                });
+            });
+
+            // Handle crawl data form submission
+            const crawlForm = document.querySelector('form[action*="crawl"]');
+            if (crawlForm) {
+                crawlForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const button = this.querySelector('button');
+                    const originalText = button.innerHTML;
+                    
+                    // Disable button and show loading state
+                    button.disabled = true;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Crawling...';
+                    
+                    // Get form data
+                    const formData = new FormData(this);
+                    
+                    // Make AJAX request
+                    fetch(this.action, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            window.location.reload();
+                        } else {
+                            alert(data.message || 'An error occurred while crawling data.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while crawling data.');
+                    })
+                    .finally(() => {
+                        // Restore button state
+                        button.disabled = false;
+                        button.innerHTML = originalText;
+                    });
+                });
+            }
+        });
+
+        function loadSellings(date, view) {
+            const collapseId = `collapse${date.replace(/[-:]/g, '')}`;
+            const collapseElement = document.getElementById(collapseId);
+            const button = collapseElement.previousElementSibling.querySelector('button');
+            const spinner = button.querySelector('.loading-spinner');
+            const buttonText = button.querySelector('.button-text');
+            const contentPlaceholder = collapseElement.querySelector('.content-placeholder');
+
+            // Show loading state
+            spinner.style.display = 'inline-block';
+            buttonText.textContent = 'Loading...';
+            button.disabled = true;
+
+            // Fetch data
+            fetch(`{{ path('app_store_sellings', {'id': store.id, 'date': 'DATE_PLACEHOLDER'}) }}`.replace('DATE_PLACEHOLDER', date) + `?view=${view}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Create tabs
+                        const tabsHtml = `
+                            <ul class="nav nav-tabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="invoices-tab" data-bs-toggle="tab" data-bs-target="#invoices" type="button" role="tab">Invoices</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">Item Summary</button>
+                                </li>
+                            </ul>
+                            <div class="tab-content">
+                                <div class="tab-pane fade show active" id="invoices" role="tabpanel">
+                                    <div class="table-responsive mt-3">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Invoice Number</th>
+                                                    <th>Payment Method</th>
+                                                    <th>Amount HT</th>
+                                                    <th>Amount TTC</th>
+                                                    <th>Status</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${data.data.sellings.map(selling => `
+                                                    <tr>
+                                                        <td>${selling.invoiceNumber}</td>
+                                                        <td>${selling.paymentMethod}</td>
+                                                        <td>${parseFloat(selling.amountHT).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €</td>
+                                                        <td>${parseFloat(selling.amountTTC).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €</td>
+                                                        <td>
+                                                            <span class="badge bg-${selling.status === 'paid' ? 'success' : 'warning'}">
+                                                                ${selling.status}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <button class="btn btn-sm btn-info" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${selling.invoiceNumber.replace(/[-:]/g, '')}" aria-expanded="false">
+                                                                <i class="fas fa-eye me-1"></i>View Details
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td colspan="6" class="p-0">
+                                                            <div class="collapse" id="collapse${selling.invoiceNumber.replace(/[-:]/g, '')}">
+                                                                <div class="card-body">
+                                                                    <div class="table-responsive">
+                                                                        <table class="table table-sm">
+                                                                            <thead>
+                                                                                <tr>
+                                                                                    <th>Description</th>
+                                                                                    <th>Quantity</th>
+                                                                                    <th>Unit Price</th>
+                                                                                    <th>Tax Rate</th>
+                                                                                    <th>Total</th>
+                                                                                    <th>Invoice Amount HT</th>
+                                                                                    <th>Price Difference</th>
+                                                                                    <th>Difference %</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                ${selling.items.map(item => `
+                                                                                    <tr>
+                                                                                        <td>${item.description}</td>
+                                                                                        <td>${item.quantity}</td>
+                                                                                        <td>${parseFloat(item.unitPrice).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €</td>
+                                                                                        <td>${parseFloat(item.taxRate).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}%</td>
+                                                                                        <td>${parseFloat(item.total).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €</td>
+                                                                                        <td>${item.invoiceItem ? parseFloat(item.invoiceItem.unitPrice).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €' : '-'}</td>
+                                                                                        <td>
+                                                                                            ${item.priceDifference !== null ? `
+                                                                                                <span class="${parseFloat(item.priceDifference) > 0 ? 'text-success' : 'text-danger'}">
+                                                                                                    ${parseFloat(item.priceDifference).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €
+                                                                                                </span>
+                                                                                            ` : '-'}
+                                                                                        </td>
+                                                                                        <td>
+                                                                                            ${item.priceDifferencePercentage !== null ? `
+                                                                                                <span class="${parseFloat(item.priceDifferencePercentage) > 0 ? 'text-success' : 'text-danger'}">
+                                                                                                    ${parseFloat(item.priceDifferencePercentage).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}%
+                                                                                                </span>
+                                                                                            ` : '-'}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                `).join('')}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="summary" role="tabpanel">
+                                    <div class="table-responsive mt-3">
+                                        <table class="table table-sm table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Description</th>
+                                                    <th>Total Quantity</th>
+                                                    <th>Total Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${Object.entries(data.data.summary.items).map(([description, data]) => `
+                                                    <tr>
+                                                        <td>${description}</td>
+                                                        <td>${data.quantity}</td>
+                                                        <td>${parseFloat(data.amount).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €</td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end mt-3">
+                                <button class="btn btn-sm btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="true">
+                                    <i class="fas fa-chevron-up me-1"></i>Hide Details
+                                </button>
+                            </div>
+                        `;
+
+                        contentPlaceholder.innerHTML = tabsHtml;
+
+                        // Add event listeners for the newly created collapse elements
+                        document.querySelectorAll('.collapse').forEach(collapse => {
+                            collapse.addEventListener('show.bs.collapse', function() {
+                                const button = this.previousElementSibling.querySelector('button');
+                                if (button) {
+                                    const icon = button.querySelector('i');
+                                    const text = button.querySelector('.button-text');
+                                    icon.classList.remove('fa-chevron-down');
+                                    icon.classList.add('fa-chevron-up');
+                                    text.textContent = 'Hide Details';
+                                }
+                            });
+
+                            collapse.addEventListener('hide.bs.collapse', function() {
+                                const button = this.previousElementSibling.querySelector('button');
+                                if (button) {
+                                    const icon = button.querySelector('i');
+                                    const text = button.querySelector('.button-text');
+                                    icon.classList.remove('fa-chevron-up');
+                                    icon.classList.add('fa-chevron-down');
+                                    text.textContent = 'Show Details';
+                                }
+                            });
+                        });
+                    } else {
+                        contentPlaceholder.innerHTML = `
+                            <div class="alert alert-danger">
+                                Failed to load data. Please try again.
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    contentPlaceholder.innerHTML = `
+                        <div class="alert alert-danger">
+                            An error occurred while loading data. Please try again.
+                        </div>
+                    `;
+                })
+                .finally(() => {
+                    // Reset button state
+                    spinner.style.display = 'none';
+                    buttonText.textContent = 'Show Details';
+                    button.disabled = false;
+                });
+        }
+    </script>
+{% endblock %} 

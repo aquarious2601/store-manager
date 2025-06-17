@@ -1,0 +1,166 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Rapport{% endblock %}
+
+{% block body %}
+    <div class="container">
+        <h1 class="mt-4">Rapport</h1>
+        
+        <ul class="nav nav-tabs" id="reportTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="monthly-tab" data-bs-toggle="tab" data-bs-target="#monthly" type="button" role="tab" aria-controls="monthly" aria-selected="true">Monthly Report</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly" type="button" role="tab" aria-controls="weekly" aria-selected="false">Weekly Report</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="product-tab" data-bs-toggle="tab" data-bs-target="#product" type="button" role="tab" aria-controls="product" aria-selected="false">Product Report</button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="reportTabsContent">
+            <div class="tab-pane fade show active" id="monthly" role="tabpanel" aria-labelledby="monthly-tab">
+                {% if monthlySummaries is empty %}
+                    <p>Aucune donnée disponible.</p>
+                {% else %}
+                    {% for monthKey, summary in monthlySummaries %}
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h2 class="h5 mb-0">{{ summary.month }}</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <strong>Nombre total de factures:</strong> {{ summary.totalInvoices }}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Montant total:</strong> {{ summary.totalAmount|number_format(2, ',', ' ') }} €
+                                    </div>
+                                </div>
+                                
+                                <h3 class="h6">Liste des factures:</h3>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Numéro de facture</th>
+                                                <th>Référence</th>
+                                                <th>Date de commande</th>
+                                                <th>Montant</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for invoiceData in summary.invoices %}
+                                                <tr>
+                                                    <td>{{ invoiceData.entity.invoiceNumber }}</td>
+                                                    <td>{{ invoiceData.entity.orderReference }}</td>
+                                                    <td>{{ invoiceData.entity.orderDate|date('d/m/Y') }}</td>
+                                                    <td>{{ invoiceData.total|number_format(2, ',', ' ') }} €</td>
+                                                    <td>
+                                                        <a href="{{ path('app_invoice_show', {'id': invoiceData.entity.id}) }}" class="btn btn-sm btn-info">Voir</a>
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+            
+            <div class="tab-pane fade" id="weekly" role="tabpanel" aria-labelledby="weekly-tab">
+                {% if weeklySummaries is empty %}
+                    <p>Aucune donnée disponible.</p>
+                {% else %}
+                    {% for weekKey, summary in weeklySummaries %}
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h2 class="h5 mb-0">{{ summary.week }}</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <strong>Nombre total de factures:</strong> {{ summary.totalInvoices }}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Montant total:</strong> {{ summary.totalAmount|number_format(2, ',', ' ') }} €
+                                    </div>
+                                </div>
+                                
+                                <h3 class="h6">Liste des factures:</h3>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Numéro de facture</th>
+                                                <th>Référence</th>
+                                                <th>Date de commande</th>
+                                                <th>Montant</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for invoiceData in summary.invoices %}
+                                                <tr>
+                                                    <td>{{ invoiceData.entity.invoiceNumber }}</td>
+                                                    <td>{{ invoiceData.entity.orderReference }}</td>
+                                                    <td>{{ invoiceData.entity.orderDate|date('d/m/Y') }}</td>
+                                                    <td>{{ invoiceData.total|number_format(2, ',', ' ') }} €</td>
+                                                    <td>
+                                                        <a href="{{ path('app_invoice_show', {'id': invoiceData.entity.id}) }}" class="btn btn-sm btn-info">Voir</a>
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+            
+            <div class="tab-pane fade" id="product" role="tabpanel" aria-labelledby="product-tab">
+                {% if productSummaries is empty %}
+                    <p>Aucune donnée disponible.</p>
+                {% else %}
+                    {% for monthKey, summary in productSummaries %}
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h2 class="h5 mb-0">{{ summary.month }}</h2>
+                            </div>
+                            <div class="card-body">
+                                <h3 class="h6">Top 10 Most Bought Products:</h3>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Rank</th>
+                                                <th>Product</th>
+                                                <th>Quantity</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% set rank = 1 %}
+                                            {% for productName, quantity in summary.products %}
+                                                <tr>
+                                                    <td>{{ rank }}</td>
+                                                    <td>{{ productName }}</td>
+                                                    <td>{{ quantity }}</td>
+                                                </tr>
+                                                {% set rank = rank + 1 %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %} 
