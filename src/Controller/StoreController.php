@@ -45,116 +45,79 @@ class StoreController extends AbstractController
         ]);
     }
 
-    #[Route('/{id}', name: 'app_store_show')]
+    #[Route('/{id}', name: 'app_store_show', methods: ['GET'])]
     public function show(Store $store, Request $request): Response
     {
-        $page = $request->query->getInt('page', 1);
         $view = $request->query->get('view', 'daily');
-        $itemsPerPage = 20;
+        $page = $request->query->getInt('page', 1);
+        $perPage = 10;
 
-        // Get all sellings for this store
-        $sellings = $store->getSellings()->toArray();
-
-        // Calculate price differences for each selling item
-        foreach ($sellings as $selling) {
-            foreach ($selling->getItems() as $item) {
-                if ($item->getInvoiceItem()) {
-                    $sellingUnitPrice = (float) $item->getUnitPrice();
-                    $invoiceUnitPrice = (float) $item->getInvoiceItem()->getUnitPrice();
-                    
-                    // Calculate absolute difference
-                    $difference = $sellingUnitPrice - $invoiceUnitPrice;
-                    
-                    // Calculate percentage difference relative to invoice price
-                    $percentageDifference = $sellingUnitPrice != 0 ? ($difference / $sellingUnitPrice * 100) : 0;
-                    
-                    // Store the calculations in the item object
-                    $item->setPriceDifference($difference);
-                    $item->setPriceDifferencePercentage($percentageDifference);
-
-                    // Debug logging
-                    error_log(sprintf(
-                        "Item %d: Selling Price: %.2f, Invoice Price: %.2f, Difference: %.2f, Percentage: %.2f%%",
-                        $item->getId(),
-                        $sellingUnitPrice,
-                        $invoiceUnitPrice,
-                        $difference,
-                        $percentageDifference
-                    ));
-                } else {
-                    // Reset values if no invoice item is linked
-                    $item->setPriceDifference(null);
-                    $item->setPriceDifferencePercentage(null);
-                    
-                    // Debug logging
-                    error_log(sprintf("Item %d: No invoice item linked", $item->getId()));
-                }
-            }
-        }
-
-        // Group sellings based on view type
-        $groupedSellings = [];
-        foreach ($sellings as $selling) {
-            $date = $selling->getDate();
-            
-            switch ($view) {
-                case 'weekly':
-                    // Get the Monday of the week
-                    $weekStart = clone $date;
-                    $weekStart->modify('monday this week');
-                    $key = $weekStart->format('Y-m-d');
-                    break;
-                case 'monthly':
-                    // Get the first day of the month
-                    $key = $date->format('Y-m');
-                    break;
-                default: // daily
-                    $key = $date->format('Y-m-d');
-            }
-
-            if (!isset($groupedSellings[$key])) {
-                $groupedSellings[$key] = [];
-            }
-            $groupedSellings[$key][] = $selling;
-        }
-
-        // Sort dates in descending order
-        krsort($groupedSellings);
-
-        // Calculate pagination
-        $totalItems = count($groupedSellings);
-        $totalPages = ceil($totalItems / $itemsPerPage);
-        $page = max(1, min($page, $totalPages));
-        $offset = ($page - 1) * $itemsPerPage;
-
-        // Get the dates for the current page
-        $dates = array_keys($groupedSellings);
-        $paginatedDates = array_slice($dates, $offset, $itemsPerPage);
-
-        // Create paginated data
-        $currentPageSellings = [];
-        foreach ($paginatedDates as $date) {
-            $currentPageSellings[$date] = $groupedSellings[$date];
-        }
-
-        // Calculate totals
-        $totalInvoices = count($sellings);
+        $sellings = $store->getSellings();
+        $grouped_sellings = [];
         $totalHT = 0;
         $totalTTC = 0;
-        foreach ($sellings as $selling) {
-            $totalHT += (float) $selling->getAmountHT();
-            $totalTTC += (float) $selling->getAmountTTC();
-        }
+        $totalInvoices = count($sellings);
+
+        // Get the date ranges
+        $today = new \DateTime();
+        $sevenDaysAgo = clone $today;
+        $sevenDaysAgo->modify('-7 days');
         
+        $fiveWeeksAgo = clone $today;
+        $fiveWeeksAgo->modify('-5 weeks');
+
+        foreach ($sellings as $selling) {
+            $totalHT += $selling->getAmountHT();
+            $totalTTC += $selling->getAmountTTC();
+            
+            $date = $selling->getDate();
+            
+            if ($view === 'daily') {
+                $dateStr = $date->format('Y-m-d');
+                // Only include sales from the last 7 days
+                if ($date >= $sevenDaysAgo) {
+                    if (!isset($grouped_sellings[$dateStr])) {
+                        $grouped_sellings[$dateStr] = [];
+                    }
+                    $grouped_sellings[$dateStr][] = $selling;
+                }
+            } elseif ($view === 'weekly') {
+                $weekStart = clone $date;
+                $weekStart->modify('monday this week');
+                $dateStr = $weekStart->format('Y-m-d');
+                // Only include sales from the last 5 weeks
+                if ($weekStart >= $fiveWeeksAgo) {
+                    if (!isset($grouped_sellings[$dateStr])) {
+                        $grouped_sellings[$dateStr] = [];
+                    }
+                    $grouped_sellings[$dateStr][] = $selling;
+                }
+            } else {
+                $dateStr = $date->format('Y-m');
+                if (!isset($grouped_sellings[$dateStr])) {
+                    $grouped_sellings[$dateStr] = [];
+                }
+                $grouped_sellings[$dateStr][] = $selling;
+            }
+        }
+
+        // Sort by date in descending order (newest first)
+        krsort($grouped_sellings);
+
+        // Calculate pagination
+        $total_pages = ceil(count($grouped_sellings) / $perPage);
+        $offset = ($page - 1) * $perPage;
+        $grouped_sellings = array_slice($grouped_sellings, $offset, $perPage, true);
+
         return $this->render('store/show.html.twig', [
             'store' => $store,
-            'grouped_sellings' => $currentPageSellings,
-            'current_page' => $page,
-            'total_pages' => $totalPages,
-            'current_view' => $view,
-            'totalInvoices' => $totalInvoices,
+            'grouped_sellings' => $grouped_sellings,
             'totalHT' => $totalHT,
             'totalTTC' => $totalTTC,
+            'totalInvoices' => $totalInvoices,
+            'current_view' => $view,
+            'current_page' => $page,
+            'total_pages' => $total_pages
         ]);
     }
 
