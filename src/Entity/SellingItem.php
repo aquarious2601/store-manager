@@ -13,9 +13,6 @@ class SellingItem
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\Column(type: 'text', nullable: true)]
-    private ?string $description = null;
-
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
     private ?string $quantity = null;
 
@@ -32,9 +29,9 @@ class SellingItem
     #[ORM\JoinColumn(nullable: false, onDelete: "CASCADE")]
     private ?Selling $selling = null;
 
-    #[ORM\ManyToOne(targetEntity: InvoiceItem::class, inversedBy: 'sellingItems')]
+    #[ORM\ManyToOne(targetEntity: Product::class)]
     #[ORM\JoinColumn(nullable: true)]
-    private ?InvoiceItem $invoiceItem = null;
+    private ?Product $productEntity = null;
 
     /**
      * Calculated price difference between selling price and invoice price
@@ -49,17 +46,6 @@ class SellingItem
     public function getId(): ?int
     {
         return $this->id;
-    }
-
-    public function getDescription(): ?string
-    {
-        return $this->description;
-    }
-
-    public function setDescription(?string $description): static
-    {
-        $this->description = $description;
-        return $this;
     }
 
     public function getQuantity(): ?string
@@ -117,14 +103,14 @@ class SellingItem
         return $this;
     }
 
-    public function getInvoiceItem(): ?InvoiceItem
+    public function getProductEntity(): ?Product
     {
-        return $this->invoiceItem;
+        return $this->productEntity;
     }
 
-    public function setInvoiceItem(?InvoiceItem $invoiceItem): static
+    public function setProductEntity(?Product $productEntity): static
     {
-        $this->invoiceItem = $invoiceItem;
+        $this->productEntity = $productEntity;
         return $this;
     }
 

@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Entity\Invoice;
 use App\Entity\InvoiceItem;
+use App\Entity\Product;
 use Doctrine\ORM\EntityManagerInterface;
 use Smalot\PdfParser\Parser;
 use Smalot\PdfParser\Document;
@@ -303,9 +304,10 @@ class PdfParserService
         foreach ($tables as $pageKey => $table) {
             $rows = $table['rows'];
             foreach ($rows as $row) {
+                // Find or create product
+                $product = $this->findOrCreateProduct($row['Référence'], $row['Code EANS'], $row['Produit']);
+                
                 $invoiceItem = new InvoiceItem();
-                $invoiceItem->setReference($row['Référence']);
-                $invoiceItem->setCodeEANS($row['Code EANS']);
                 $invoiceItem->setTaxRate($row['Taux de taxe']);
                 // Convert price strings to numbers (remove € and spaces)
                 $unitPrice = str_replace(['€', ' '], '', $row['Prix Unitaire (HT)']);
@@ -316,8 +318,7 @@ class PdfParserService
                 $invoiceItem->setQuantity($row['Quantité']);
                 $invoiceItem->setTotal((float) $totalPrice);
                 $invoiceItem->setInvoice($invoice);
-                $invoiceItem->setDescription($row['Produit']);
-                $invoiceItem->setProduct($row['Produit']);
+                $invoiceItem->setProductEntity($product);
 
                 // Persist the invoice item
                 $this->entityManager->persist($invoiceItem);
@@ -326,6 +327,23 @@ class PdfParserService
 
         // Flush changes to the database
         $this->entityManager->flush();
+    }
+
+    private function findOrCreateProduct(string $reference, string $eansCode, string $productName): Product
+    {
+        // Try to find existing product by kc_code
+        $product = $this->entityManager->getRepository(Product::class)->findOneBy(['kcCode' => $reference]);
+        
+        if (!$product) {
+            // Create new product
+            $product = new Product();
+            $product->setKcCode($reference);
+            $product->setEansCode($eansCode);
+            $product->setName($productName);
+            $this->entityManager->persist($product);
+        }
+        
+        return $product;
     }
 
     private function saveToDatabase(array $metadata, array $rows): void
@@ -341,10 +359,10 @@ class PdfParserService
 
         // Create and save InvoiceItems
         foreach ($rows as $row) {
+            // Find or create product
+            $product = $this->findOrCreateProduct($row['Référence'], $row['Code EANS'], $row['Produit']);
+            
             $item = new InvoiceItem();
-            $item->setReference($row['Référence']);
-            $item->setCodeEans($row['Code EANS']);
-            $item->setProduct($row['Produit']);
             $item->setTaxRate($row['Taux de taxe']);
             
             // Convert price strings to numbers (remove € and spaces)
@@ -357,9 +375,7 @@ class PdfParserService
             $item->setUnitPrice($unitPrice);
             $item->setQuantity((int)$row['Quantité']);
             $item->setTotal($totalPrice);
-            
-            $description = $row['Description'] ?? 'N/A'; // Use 'N/A' if Description is null
-            $item->setDescription($description);
+            $item->setProductEntity($product);
             
             $invoice->addItem($item);
             $totalAmount += (float)$totalPrice;

@@ -59,9 +59,9 @@
                     <tbody>
                         {% for item in invoice.items %}
                             <tr>
-                                <td>{{ item.reference }}</td>
-                                <td>{{ item.codeEans }}</td>
-                                <td>{{ item.product }}</td>
+                                <td>{{ item.productEntity ? item.productEntity.kcCode : '-' }}</td>
+                                <td>{{ item.productEntity ? item.productEntity.eansCode : '-' }}</td>
+                                <td>{{ item.productEntity ? item.productEntity.name : '-' }}</td>
                                 <td>{{ item.taxRate }}</td>
                                 <td>{{ item.unitPrice|number_format(2, ',', ' ') }} €</td>
                                 <td>{{ item.quantity }}</td>

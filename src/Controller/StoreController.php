@@ -6,6 +6,7 @@ use App\Entity\Store;
 use App\Form\StoreType;
 use App\Repository\StoreRepository;
 use App\Service\StoreCrawlerService;
+use App\Service\PriceComparisonService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,6 +17,10 @@ use Symfony\Component\Routing\Annotation\Route;
 #[Route('/store')]
 class StoreController extends AbstractController
 {
+    public function __construct(
+        private PriceComparisonService $priceComparisonService
+    ) {}
+
     #[Route('/', name: 'app_store_index', methods: ['GET'])]
     public function index(StoreRepository $storeRepository): Response
     {
@@ -209,18 +214,22 @@ class StoreController extends AbstractController
             $totalTTC += (float) $selling->getAmountTTC();
         }
 
-        // Prepare items summary
+        // Calculate summary statistics
         $itemsSummary = [];
         foreach ($filteredSellings as $selling) {
             foreach ($selling->getItems() as $item) {
-                if (!isset($itemsSummary[$item->getDescription()])) {
-                    $itemsSummary[$item->getDescription()] = [
+                $productName = $item->getProductEntity() 
+                    ? $item->getProductEntity()->getName() 
+                    : 'Unknown Product';
+                
+                if (!isset($itemsSummary[$productName])) {
+                    $itemsSummary[$productName] = [
                         'quantity' => 0,
-                        'amount' => 0
+                        'amount' => 0,
                     ];
                 }
-                $itemsSummary[$item->getDescription()]['quantity'] += $item->getQuantity();
-                $itemsSummary[$item->getDescription()]['amount'] += $item->getTotal();
+                $itemsSummary[$productName]['quantity'] += $item->getQuantity();
+                $itemsSummary[$productName]['amount'] += $item->getTotal();
             }
         }
 
@@ -234,10 +243,21 @@ class StoreController extends AbstractController
             return $b->getId() <=> $a->getId();
         });
 
+        // Get all selling items for price comparison
+        $allSellingItems = [];
+        foreach ($filteredSellings as $selling) {
+            foreach ($selling->getItems() as $item) {
+                $allSellingItems[] = $item;
+            }
+        }
+
+        // Get price comparisons for all items at once
+        $priceComparisons = $this->priceComparisonService->getPriceComparisonsForItems($allSellingItems);
+
         return $this->json([
             'success' => true,
             'data' => [
-                'sellings' => array_map(function($selling) {
+                'sellings' => array_map(function($selling) use ($priceComparisons) {
                     return [
                         'id' => $selling->getId(),
                         'invoiceNumber' => $selling->getInvoiceNumber(),
@@ -245,29 +265,25 @@ class StoreController extends AbstractController
                         'amountHT' => $selling->getAmountHT(),
                         'amountTTC' => $selling->getAmountTTC(),
                         'status' => $selling->getStatus(),
-                        'items' => array_map(function($item) {
-                            $invoiceItem = $item->getInvoiceItem();
-                            $priceDifference = null;
-                            $priceDifferencePercentage = null;
-
-                            if ($invoiceItem) {
-                                $priceDifference = $item->getUnitPrice() - $invoiceItem->getUnitPrice();
-                                if ($item->getUnitPrice() > 0) {
-                                    $priceDifferencePercentage = ($priceDifference / $item->getUnitPrice()) * 100;
-                                }
-                            }
+                        'items' => array_map(function($item) use ($priceComparisons) {
+                            $product = $item->getProductEntity();
+                            $comparison = $priceComparisons[$item->getId()] ?? [];
 
                             return [
-                                'description' => $item->getDescription(),
+                                'productName' => $product ? $product->getName() : 'Unknown Product',
                                 'quantity' => $item->getQuantity(),
                                 'unitPrice' => $item->getUnitPrice(),
                                 'taxRate' => $item->getTaxRate(),
                                 'total' => $item->getTotal(),
-                                'invoiceItem' => $invoiceItem ? [
-                                    'unitPrice' => $invoiceItem->getUnitPrice(),
+                                'product' => $product ? [
+                                    'id' => $product->getId(),
+                                    'name' => $product->getName(),
+                                    'kcCode' => $product->getKcCode(),
+                                    'eansCode' => $product->getEansCode(),
                                 ] : null,
-                                'priceDifference' => $priceDifference,
-                                'priceDifferencePercentage' => $priceDifferencePercentage,
+                                'latestInvoiceItem' => $comparison['latestInvoiceItem'] ?? null,
+                                'priceDifference' => $comparison['priceDifference'] ?? null,
+                                'priceDifferencePercentage' => $comparison['priceDifferencePercentage'] ?? null,
                             ];
                         }, $selling->getItems()->toArray()),
                     ];

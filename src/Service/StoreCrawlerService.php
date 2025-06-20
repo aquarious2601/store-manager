@@ -13,7 +13,6 @@ use Symfony\Component\BrowserKit\HttpBrowser;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Psr\Log\LoggerInterface;
 use Doctrine\ORM\EntityManagerInterface;
-use App\Service\SellingItemLinkerService;
 
 class StoreCrawlerService
 {
@@ -22,18 +21,15 @@ class StoreCrawlerService
     private $logFile;
     private $entityManager;
     private $sellingRepository;
-    private $linkerService;
 
     public function __construct(
         LoggerInterface $logger,
         EntityManagerInterface $entityManager,
-        SellingRepository $sellingRepository,
-        SellingItemLinkerService $linkerService
+        SellingRepository $sellingRepository
     ) {
         $this->logger = $logger;
         $this->entityManager = $entityManager;
         $this->sellingRepository = $sellingRepository;
-        $this->linkerService = $linkerService;
         $this->browser = new HttpBrowser(HttpClient::create([
             'headers' => [
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -190,7 +186,6 @@ class StoreCrawlerService
             if ($details && isset($details['lines'])) {
                 foreach ($details['lines'] as $line) {
                     $item = new SellingItem();
-                    $item->setDescription($line['description']);
                     $item->setQuantity($line['quantity']);
                     $item->setTaxRate($line['tax_rate']);
                     $item->setTotal($line['total_ttc']);
@@ -202,18 +197,18 @@ class StoreCrawlerService
                         $item->setUnitPrice($line['total_ttc'] / $line['quantity']);
                     }
                     
+                    // Link to Product based on description
+                    if (isset($line['description']) && !empty($line['description'])) {
+                        $product = $this->findOrCreateProductByName($line['description']);
+                        $item->setProductEntity($product);
+                    }
+                    
                     $selling->addItem($item);
                 }
                 $this->logToFile("Added " . count($details['lines']) . " items to invoice {$invoice['invoiceNumber']}");
             }
 
             $this->entityManager->persist($selling);
-            $this->entityManager->flush();
-
-            // Link selling items to invoice items
-            foreach ($selling->getItems() as $item) {
-                $this->linkerService->linkSellingItem($item);
-            }
             $this->entityManager->flush();
 
             $this->logToFile("Created selling record for invoice {$invoice['invoiceNumber']}");
@@ -324,6 +319,50 @@ class StoreCrawlerService
     {
         $parsedUrl = parse_url($url);
         return $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
+    }
+
+    /**
+     * Find or create a Product by name
+     */
+    private function findOrCreateProductByName(string $productName): ?\App\Entity\Product
+    {
+        try {
+            // Try to find existing product by name (exact match)
+            $product = $this->entityManager->getRepository(\App\Entity\Product::class)
+                ->findOneBy(['name' => $productName]);
+            
+            if ($product) {
+                return $product;
+            }
+            
+            // Try to find by name using LIKE (partial match)
+            $qb = $this->entityManager->createQueryBuilder();
+            $qb->select('p')
+               ->from(\App\Entity\Product::class, 'p')
+               ->where('p.name LIKE :name')
+               ->setParameter('name', '%' . $productName . '%')
+               ->setMaxResults(1);
+            
+            $product = $qb->getQuery()->getOneOrNullResult();
+            
+            if ($product) {
+                return $product;
+            }
+            
+            // Create new product if not found
+            $product = new \App\Entity\Product();
+            $product->setName($productName);
+            $product->setKcCode('AUTO-' . substr(md5($productName), 0, 8)); // Generate a unique KC code
+            $product->setEansCode(''); // Empty EAN code for auto-created products
+            
+            $this->entityManager->persist($product);
+            $this->logToFile("Created new product: {$productName}");
+            
+            return $product;
+        } catch (\Exception $e) {
+            $this->logToFile("Error finding/creating product for name '{$productName}': " . $e->getMessage());
+            return null;
+        }
     }
 
     public function crawlStore(Store $store, int $limit = 10): array

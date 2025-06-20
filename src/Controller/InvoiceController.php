@@ -69,13 +69,15 @@ class InvoiceController extends AbstractController
 
         $qb = $invoiceRepository->createQueryBuilder('i')
             ->leftJoin('i.items', 'item')
+            ->leftJoin('item.productEntity', 'product')
             ->addSelect('item')
+            ->addSelect('product')
             ->orderBy('i.orderDate', 'DESC');
 
         if ($query) {
             $qb->andWhere('LOWER(i.invoiceNumber) LIKE LOWER(:query) OR 
                           LOWER(i.orderReference) LIKE LOWER(:query) OR 
-                          LOWER(item.product) LIKE LOWER(:query)')
+                          LOWER(product.name) LIKE LOWER(:query)')
                ->setParameter('query', '%' . $query . '%');
         }
 
@@ -106,11 +108,16 @@ class InvoiceController extends AbstractController
         foreach ($invoices as $invoice) {
             $filteredItems = [];
             foreach ($invoice->getItems() as $item) {
-                if (empty($query) || 
-                    stripos($item->getProduct(), $query) !== false) {
+                if ($query) {
+                    // Check if the item matches the search query
+                    if (stripos($item->getProductEntity()?->getName() ?? '', $query) !== false) {
+                        $filteredItems[] = $item;
+                    }
+                } else {
                     $filteredItems[] = $item;
                 }
             }
+            
             if (!empty($filteredItems)) {
                 $invoice->setFilteredItems($filteredItems);
                 $filteredInvoices[] = $invoice;
@@ -123,7 +130,7 @@ class InvoiceController extends AbstractController
             'startDate' => $startDate,
             'endDate' => $endDate,
             'minAmount' => $minAmount,
-            'maxAmount' => $maxAmount
+            'maxAmount' => $maxAmount,
         ]);
     }
 
@@ -197,7 +204,7 @@ class InvoiceController extends AbstractController
             }
 
             foreach ($invoice->getItems() as $item) {
-                $productName = $item->getProduct();
+                $productName = $item->getProductEntity()?->getName() ?? 'Unknown Product';
                 if (!isset($productSummaries[$monthKey]['products'][$productName])) {
                     $productSummaries[$monthKey]['products'][$productName] = 0;
                 }
