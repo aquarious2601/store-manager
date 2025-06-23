@@ -312,8 +312,8 @@
                                                         <td>${parseFloat(selling.amountHT).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €</td>
                                                         <td>${parseFloat(selling.amountTTC).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})} €</td>
                                                         <td>
-                                                            <span class="badge bg-${selling.status === 'paid' ? 'success' : 'warning'}">
-                                                                ${selling.status}
+                                                            <span class="badge bg-${selling.status && selling.status.toLowerCase() === 'payée' ? 'success' : 'warning'}">
+                                                                ${selling.status && selling.status.toLowerCase() === 'payée' ? 'Payé' : selling.status}
                                                             </span>
                                                         </td>
                                                         <td>

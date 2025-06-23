@@ -16,7 +16,7 @@ class SellingItem
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
     private ?string $quantity = null;
 
-    #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
     private ?string $unitPrice = null;
 
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]

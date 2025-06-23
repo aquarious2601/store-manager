@@ -183,29 +183,39 @@ class StoreCrawlerService
 
             // Crawl invoice details
             $details = $this->crawlInvoiceDetails($store, $invoice['detailsUrl']);
+            $hasWarning = false;
             if ($details && isset($details['lines'])) {
                 foreach ($details['lines'] as $line) {
                     $item = new SellingItem();
                     $item->setQuantity($line['quantity']);
                     $item->setTaxRate($line['tax_rate']);
                     $item->setTotal($line['total_ttc']);
-                    
-                    // Calculate unit price if not available
-                    if (isset($line['total_ht'])) {
-                        $item->setUnitPrice($line['total_ht'] / $line['quantity']);
+
+                    // Only calculate unit price if quantity is not null/0
+                    if (!empty($line['quantity'])) {
+                        if (isset($line['total_ht'])) {
+                            $item->setUnitPrice($line['total_ht'] / $line['quantity']);
+                        } else {
+                            $item->setUnitPrice($line['total_ttc'] / $line['quantity']);
+                        }
                     } else {
-                        $item->setUnitPrice($line['total_ttc'] / $line['quantity']);
+                        $hasWarning = true;
                     }
-                    
+
                     // Link to Product based on description
                     if (isset($line['description']) && !empty($line['description'])) {
                         $product = $this->findOrCreateProductByName($line['description']);
                         $item->setProductEntity($product);
                     }
-                    
+
                     $selling->addItem($item);
                 }
                 $this->logToFile("Added " . count($details['lines']) . " items to invoice {$invoice['invoiceNumber']}");
+            }
+
+            // If any line had null/0 quantity, set status to 'warning'
+            if ($hasWarning) {
+                $selling->setStatus('warning');
             }
 
             $this->entityManager->persist($selling);
