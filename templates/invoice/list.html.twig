@@ -5,10 +5,25 @@
 {% block body %}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>Invoices</h1>
-        <form id="uploadForm" action="/api/pdf/upload" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
-            <input type="file" name="pdf" accept="application/pdf" class="form-control" required>
-            <button type="submit" class="btn btn-primary">Upload PDF</button>
-        </form>
+        <div class="d-flex gap-2">
+            <!-- Single File Upload -->
+            <form id="uploadForm" action="/api/pdf/upload" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+                <input type="file" name="pdf" accept="application/pdf" class="form-control" required>
+                <button type="submit" class="btn btn-primary">Upload Single PDF</button>
+            </form>
+            
+            <!-- Multiple Files Upload -->
+            <form id="uploadMultipleForm" action="/api/pdf/upload-multiple" method="post" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+                <input type="file" name="pdfs[]" accept="application/pdf" multiple class="form-control">
+                <button type="submit" class="btn btn-success">Upload Multiple PDFs</button>
+            </form>
+            
+            <!-- Folder Upload -->
+            <form id="uploadFolderForm" action="/api/pdf/upload-folder" method="post" class="d-flex align-items-center gap-2">
+                <input type="text" name="folder_path" placeholder="Enter folder path" class="form-control">
+                <button type="submit" class="btn btn-info">Upload Folder</button>
+            </form>
+        </div>
     </div>
 
     <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="position: absolute; top: 20px; right: 20px; min-width: 200px;">
@@ -19,8 +34,28 @@
         <div class="toast-body"></div>
     </div>
 
+    <!-- Upload Progress Modal -->
+    <div class="modal fade" id="uploadProgressModal" tabindex="-1" aria-labelledby="uploadProgressModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadProgressModalLabel">Upload Progress</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="uploadSummary" class="mb-3"></div>
+                    <div id="uploadResults" class="max-height-400 overflow-auto"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Single file upload
         document.getElementById('uploadForm').addEventListener('submit', function(event) {
             event.preventDefault();
             const formData = new FormData(this);
@@ -35,6 +70,8 @@
                 if (data.success) {
                     toastBody.textContent = data.message;
                     toastBody.className = 'toast-body bg-success text-white';
+                    // Reload page to show new invoice
+                    setTimeout(() => window.location.reload(), 1500);
                 } else {
                     toastBody.textContent = data.error;
                     toastBody.className = 'toast-body bg-danger text-white';
@@ -49,6 +86,121 @@
                 toast.show();
             });
         });
+
+        // Multiple files upload
+        document.getElementById('uploadMultipleForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            const files = this.querySelector('input[type="file"]').files;
+            
+            if (files.length === 0) {
+                alert('Please select at least one file.');
+                return;
+            }
+
+            // Clear previous results
+            document.getElementById('uploadSummary').innerHTML = '';
+            document.getElementById('uploadResults').innerHTML = '';
+            
+            // Show progress modal
+            const modal = new bootstrap.Modal(document.getElementById('uploadProgressModal'));
+            modal.show();
+
+            fetch('/api/pdf/upload-multiple', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayUploadResults(data);
+                    // Reload page after a delay to show new invoices
+                    setTimeout(() => window.location.reload(), 3000);
+                } else {
+                    document.getElementById('uploadSummary').innerHTML = 
+                        `<div class="alert alert-danger">${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('uploadSummary').innerHTML = 
+                    '<div class="alert alert-danger">An error occurred during upload.</div>';
+            });
+        });
+
+        // Folder upload
+        document.getElementById('uploadFolderForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            const folderPath = this.querySelector('input[name="folder_path"]').value;
+            
+            if (!folderPath) {
+                alert('Please enter a folder path.');
+                return;
+            }
+
+            // Clear previous results
+            document.getElementById('uploadSummary').innerHTML = '';
+            document.getElementById('uploadResults').innerHTML = '';
+            
+            // Show progress modal
+            const modal = new bootstrap.Modal(document.getElementById('uploadProgressModal'));
+            modal.show();
+
+            fetch('/api/pdf/upload-folder', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayUploadResults(data);
+                    // Reload page after a delay to show new invoices
+                    setTimeout(() => window.location.reload(), 3000);
+                } else {
+                    document.getElementById('uploadSummary').innerHTML = 
+                        `<div class="alert alert-danger">${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('uploadSummary').innerHTML = 
+                    '<div class="alert alert-danger">An error occurred during upload.</div>';
+            });
+        });
+
+        function displayUploadResults(data) {
+            const summary = data.summary;
+            const results = data.results;
+            
+            // Display summary
+            document.getElementById('uploadSummary').innerHTML = `
+                <div class="alert alert-info">
+                    <strong>Upload Summary:</strong><br>
+                    Total files: ${summary.total}<br>
+                    Successful: <span class="text-success">${summary.successful}</span><br>
+                    Failed: <span class="text-danger">${summary.failed}</span>
+                </div>
+            `;
+            
+            // Display detailed results
+            const resultsContainer = document.getElementById('uploadResults');
+            if (results.length > 0) {
+                let resultsHtml = '<h6>Detailed Results:</h6><div class="list-group">';
+                results.forEach(result => {
+                    const statusClass = result.success ? 'list-group-item-success' : 'list-group-item-danger';
+                    const statusIcon = result.success ? '✓' : '✗';
+                    resultsHtml += `
+                        <div class="list-group-item ${statusClass}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>${statusIcon}</strong> ${result.filename}</span>
+                                <small>${result.success ? result.message : result.error}</small>
+                            </div>
+                        </div>
+                    `;
+                });
+                resultsHtml += '</div>';
+                resultsContainer.innerHTML = resultsHtml;
+            }
+        }
 
         document.querySelectorAll('.btn-delete-invoice').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -87,6 +239,15 @@
         });
     });
     </script>
+
+    <style>
+    .max-height-400 {
+        max-height: 400px;
+    }
+    .overflow-auto {
+        overflow-y: auto;
+    }
+    </style>
 
     {% if app.session.flashBag.has('success') %}
         <div class="alert alert-success">
@@ -140,7 +301,7 @@
         </div>
     {% else %}
         <div class="alert alert-info">
-            No invoices found. Use the form above to upload your first invoice.
+            No invoices found. Use the forms above to upload your first invoice.
         </div>
     {% endif %}
 {% endblock %} 
